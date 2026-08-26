@@ -126,6 +126,19 @@ async function runDouyinAccount(
       waitUntil: 'domcontentloaded',
     })
 
+    // --- 新增：检测是否要求登录 ---
+    const loginButton = page.locator('text=一键登录').or(page.locator('text=登录')).first()
+    const hasLogin = await loginButton
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => true)
+      .catch(() => false)
+    
+    if (hasLogin) {
+      // 为了调试，可以截个图
+      await captureFailureScreenshot(page, account.name)
+      throw new Error('页面出现登录按钮，Cookie 已失效或未正确设置')
+    }
+    
     const searchInput = page.locator('input.semi-input[placeholder="搜索"]').first()
     const searchVisible = await searchInput
       .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
