@@ -235,62 +235,103 @@ async function runDouyinAccount(
       console.log(`[${account.name}] 已打开私信：${targetName}`)
 
       // ------ 改进后的发送消息逻辑 ------
-      const editorInput = page
-        .locator(
-          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
-        )
-        .first()
-      await editorInput.waitFor({ state: 'visible', timeout: 10000 })
-
-      // 1. 确保输入框聚焦
-      await editorInput.focus()
-      await page.waitForTimeout(200)
-
-      // 2. 清空可能残留的内容
-      await editorInput.fill('')
-      await page.waitForTimeout(100)
-
-      // 3. 输入消息（模拟打字，更真实）
-      const message = `hello`  // 可根据需要替换为模板内容
-      for (const char of message) {
-        await page.keyboard.type(char, { delay: Math.random() * 80 + 20 }); // 20~100ms 随机敲击
-      }
-
-      // 4. 优先点击“发送”按钮（如果存在），否则按回车
-      const sendButton = page
-        .locator('.send-btn, .chatSendButton, [aria-label="发送"], .message-send-btn')
-        .first()
-      const sendBtnVisible = await sendButton.isVisible().catch(() => false)
-      if (sendBtnVisible) {
-        await sendButton.click()
-        console.log(`[${account.name}] 点击发送按钮：${targetName}`)
-      } else {
-        await page.keyboard.press('Enter')
-        console.log(`[${account.name}] 按回车发送：${targetName}`)
-      }
-
-      // 5. 验证发送是否成功（等待输入框清空，或检查是否有错误提示）
-      try {
-        // 等待输入框内容变为空（发送成功后通常会被清空）
-        await page.waitForFunction(
-          (selector: string) => {
-            const el = document.querySelector(selector) as HTMLElement
-            return el && el.innerText.trim() === ''
-          },
-          { timeout: 5000 },
-          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]'
-        )
-        console.log(`[${account.name}] 消息发送成功：${targetName}`)
-      } catch (e) {
-        // 输入框未清空，可能发送失败，截图留证
-        console.warn(`[${account.name}] 消息可能未发送成功（输入框未清空）：${targetName}`)
-        await captureFailureScreenshot(page, `${account.name}-${targetName}-send-fail`)
-      }
-
-      await randomDelay(1500, 5000);
+    const editorInput = page
+      .locator(
+        '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
+      )
+      .first()
+    await editorInput.waitFor({ state: 'visible', timeout: 10000 })
+    
+    // 1. 聚焦并清空
+    await editorInput.focus()
+    await page.waitForTimeout(200 + Math.random() * 300)
+    await editorInput.evaluate((el: HTMLElement) => {
+      el.innerText = '';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    })
+    
+    // 2. 模拟真人输入
+    const message = `hello`
+    for (const char of message) {
+      await page.keyboard.type(char, { delay: Math.random() * 80 + 20 });
     }
-
-    await page.waitForTimeout(5000)
+    await page.waitForTimeout(300 + Math.random() * 500)
+    
+    // 3. 获取发送前的最后一条消息
+    const lastMsgBefore = await page
+      .locator('.messageListItem, .chat-message-item, [class*="message"]')
+      .last()
+      .textContent()
+      .catch(() => '');
+    
+    // 4. 发送（优先点击按钮）
+    const sendButton = page
+      .locator([
+        '.send-btn',
+        '.chatSendButton',
+        '[aria-label="发送"]',
+        '.message-send-btn',
+        'button:has-text("发送")',
+        '.send-button',
+        '[data-testid="send-btn"]',
+        '.im-send-btn',
+      ].join(', '))
+      .first()
+    
+    const sendBtnVisible = await sendButton.isVisible({ timeout: 3000 }).catch(() => false)
+    if (sendBtnVisible) {
+      await sendButton.click({ force: true })
+      console.log(`[${account.name}] 点击发送按钮：${targetName}`)
+    } else {
+      // 触发完整键盘事件
+      await page.evaluate(() => {
+        const el = document.querySelector(
+          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]'
+        ) as HTMLElement;
+        if (el) {
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, bubbles: true, cancelable: true }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', which: 13, bubbles: true }));
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+      console.log(`[${account.name}] 触发 Enter 键盘事件：${targetName}`);
+    }
+    
+    // 5. 验证发送是否成功（检查聊天记录）
+    try {
+      await page.waitForFunction(
+        (prevText: string) => {
+          const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
+          if (items.length === 0) return false;
+          const last = items[items.length - 1] as HTMLElement;
+          return last.innerText.trim() !== prevText.trim() && last.innerText.trim() !== '';
+        },
+        { timeout: 8000 },
+        lastMsgBefore
+      );
+      console.log(`[${account.name}] 消息发送成功：${targetName}`);
+    } catch (e) {
+      console.warn(`[${account.name}] 消息未出现在聊天记录，尝试兜底方案...`);
+      // 兜底：点击空白区域触发失焦发送
+      await page.mouse.click(10, 10);
+      await page.waitForTimeout(500);
+      // 再次检查
+      const finalCheck = await page.evaluate(() => {
+        const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
+        if (items.length === 0) return false;
+        const last = items[items.length - 1] as HTMLElement;
+        return last.innerText.trim() !== '' && last.innerText.trim() === 'hello'; // 检查是否包含刚发的消息
+      });
+      if (finalCheck) {
+        console.log(`[${account.name}] 兜底方案生效，消息已发送：${targetName}`);
+      } else {
+        console.warn(`[${account.name}] 消息发送最终失败：${targetName}`);
+        await captureFailureScreenshot(page, `${account.name}-${targetName}-send-fail`);
+      }
+    }
+    
+    // 6. 随机延迟
+    await randomDelay(2000, 5000);
 
     if (missingNames.length > 0) {
       throw new Error(
