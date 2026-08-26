@@ -132,24 +132,23 @@ async function runDouyinAccount(
   autoClose: boolean,
 ): Promise<void> {
   const context = await browser.newContext({
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-  viewport: { width: 1920, height: 1080 },
-  deviceScaleFactor: 1,
-  hasTouch: false,
-  isMobile: false,
-  locale: 'zh-CN',
-  timezoneId: 'Asia/Shanghai',
-  permissions: ['geolocation'],
-  geolocation: { longitude: 116.4, latitude: 39.9 },
-  extraHTTPHeaders: {
-    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-  },
-})
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    viewport: { width: 1920, height: 1080 },
+    deviceScaleFactor: 1,
+    hasTouch: false,
+    isMobile: false,
+    locale: 'zh-CN',
+    timezoneId: 'Asia/Shanghai',
+    permissions: ['geolocation'],
+    geolocation: { longitude: 116.4, latitude: 39.9 },
+    extraHTTPHeaders: {
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    },
+  })
 
   // 注入脚本，删除 webdriver 标记
   await context.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-    // 可选：隐藏更多自动化特征
     // @ts-ignore
     window.chrome = { runtime: {} }
     // @ts-ignore
@@ -176,15 +175,11 @@ async function runDouyinAccount(
     }
     
     page = await context.newPage()
-    // --- 修改点1: 改用 'commit' 等待，避免资源加载慢导致超时 ---
+    // 改用 'commit' 等待，避免资源加载慢导致超时
     await page.goto('https://www.douyin.com/chat', {
       waitUntil: 'commit',
-      timeout: 60000,        // 适当延长
+      timeout: 60000,
     })
-    
-    // --- 修改点2: 移除 networkidle 等待（或保留但缩短超时） ---
-    // 注释掉或删除下面这行
-    // await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
     
     // --- 处理可能出现的弹窗 ---
     try {
@@ -212,8 +207,7 @@ async function runDouyinAccount(
     
     await waitForChatListReady(page, account.name)
 
-
-    // 记录未命中的会话，等其余好友都发完再统一报错，避免一个人改名连累当天所有人。
+    // 记录未命中的会话，等其余好友都发完再统一报错
     const missingNames: string[] = []
     const needsYiyan =
       account.messageTemplate === undefined ||
@@ -234,21 +228,58 @@ async function runDouyinAccount(
       await searchResult.getByText(/^(发消息|发私信)$/).click({ timeout: 5000 })
       console.log(`[${account.name}] 已打开私信：${targetName}`)
 
+      // ------ 改进后的发送消息逻辑 ------
       const editorInput = page
         .locator(
           '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
         )
         .first()
       await editorInput.waitFor({ state: 'visible', timeout: 10000 })
-      await editorInput.click()
-      //const yiyan = pickRandomYiyan(yiyans)
 
-      // const message = includeYiyanSource ? `${yiyan.hitokoto}\n——「${yiyan.from}」` : yiyan.hitokoto
-      const message = `hello`
-      await page.keyboard.insertText(message)
-      await page.keyboard.press('Enter')
-      console.log(`[${account.name}] 已发送消息：${targetName}`)
-      await page.waitForTimeout(1000)
+      // 1. 确保输入框聚焦
+      await editorInput.focus()
+      await page.waitForTimeout(200)
+
+      // 2. 清空可能残留的内容
+      await editorInput.fill('')
+      await page.waitForTimeout(100)
+
+      // 3. 输入消息（模拟打字，更真实）
+      const message = `hello`  // 可根据需要替换为模板内容
+      await page.keyboard.type(message, { delay: 50 })
+
+      // 4. 优先点击“发送”按钮（如果存在），否则按回车
+      const sendButton = page
+        .locator('.send-btn, .chatSendButton, [aria-label="发送"], .message-send-btn')
+        .first()
+      const sendBtnVisible = await sendButton.isVisible().catch(() => false)
+      if (sendBtnVisible) {
+        await sendButton.click()
+        console.log(`[${account.name}] 点击发送按钮：${targetName}`)
+      } else {
+        await page.keyboard.press('Enter')
+        console.log(`[${account.name}] 按回车发送：${targetName}`)
+      }
+
+      // 5. 验证发送是否成功（等待输入框清空，或检查是否有错误提示）
+      try {
+        // 等待输入框内容变为空（发送成功后通常会被清空）
+        await page.waitForFunction(
+          (selector: string) => {
+            const el = document.querySelector(selector) as HTMLElement
+            return el && el.innerText.trim() === ''
+          },
+          { timeout: 5000 },
+          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]'
+        )
+        console.log(`[${account.name}] 消息发送成功：${targetName}`)
+      } catch (e) {
+        // 输入框未清空，可能发送失败，截图留证
+        console.warn(`[${account.name}] 消息可能未发送成功（输入框未清空）：${targetName}`)
+        await captureFailureScreenshot(page, `${account.name}-${targetName}-send-fail`)
+      }
+
+      await page.waitForTimeout(1500) // 适当延迟避免频率过快
     }
 
     await page.waitForTimeout(5000)
@@ -263,30 +294,26 @@ async function runDouyinAccount(
 
     console.log(`账号执行完成：${account.name}`)
   } catch (error) {
-    // —— 增加页面恢复逻辑 ——
-  let captureTarget = page;
-  
-  // 如果原页面不存在或已关闭，尝试新建一个页面用于截图
-  if (!captureTarget || captureTarget.isClosed()) {
-    console.log(`[截图] 原页面已关闭 (isClosed=${captureTarget?.isClosed()})，尝试创建新页面截图...`);
-    try {
-      // 优先复用当前 context（如果还没关闭）
-      if (context && !context.closed()) {
-        captureTarget = await context.newPage();
-        await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {});
-      } else {
-        // 如果 context 也关了，直接用 browser 新建
-        const newContext = await browser.newContext();
-        captureTarget = await newContext.newPage();
-        await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    // —— 截图容错 ——
+    let captureTarget = page
+    if (!captureTarget || captureTarget.isClosed()) {
+      console.log(`[截图] 原页面已关闭，尝试创建新页面截图...`)
+      try {
+        if (context && !context.closed()) {
+          captureTarget = await context.newPage()
+          await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
+        } else {
+          const newContext = await browser.newContext()
+          captureTarget = await newContext.newPage()
+          await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
+        }
+        console.log(`[截图] 新页面创建完成`)
+      } catch (e) {
+        console.error(`[截图] 创建新页面失败:`, e)
       }
-      console.log(`[截图] 新页面创建完成，准备截图`);
-    } catch (e) {
-      console.error(`[截图] 创建新页面失败:`, e);
     }
-  }
-
-    await captureFailureScreenshot(page, account.name)
+    // 注意：这里传入 captureTarget 而不是 page
+    await captureFailureScreenshot(captureTarget, account.name)
     throw error
   } finally {
     if (autoClose) {
@@ -294,7 +321,6 @@ async function runDouyinAccount(
     }
   }
 }
-
 /**
  * 等待会话列表真正渲染出数据再开始搜索。
  *
