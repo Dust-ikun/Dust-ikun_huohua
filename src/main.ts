@@ -121,6 +121,16 @@ async function runDouyinAccount(
     console.log(`开始执行账号：${account.name}`)
     await context.addCookies(account.cookies)
 
+    // 立即读取当前上下文中的所有 Cookie（仅限 douyin.com 域）
+    const cookiesAfter = await context.cookies('https://www.douyin.com');
+    console.log(`[${account.name}] 添加后总 Cookie 数: ${cookiesAfter.length}`);
+    const hasSession = cookiesAfter.some(c => c.name === 'sessionid');
+    console.log(`[${account.name}] 是否包含 sessionid: ${hasSession}`);
+    if (hasSession) {
+        const sessionVal = cookiesAfter.find(c => c.name === 'sessionid')?.value;
+        console.log(`[${account.name}] sessionid 值: ${sessionVal}`);
+    }
+    
     page = await context.newPage()
     await page.goto('https://www.douyin.com/chat', {
       waitUntil: 'domcontentloaded',
