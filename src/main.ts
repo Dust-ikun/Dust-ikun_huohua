@@ -332,7 +332,7 @@ async function runDouyinAccount(
     
     // 6. 随机延迟
     await randomDelay(2000, 5000);
-
+    }
     if (missingNames.length > 0) {
       throw new Error(
         `以下会话未找到，火花可能已经中断：${missingNames.join('、')}。` +
