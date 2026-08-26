@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { chromium } from 'playwright-extra'
-import StealthPlugin from '@puppeteer/extra-plugin-stealth'
+import StealthPlugin from 'puppeteer/extra-plugin-stealth'
 import { type Browser, type Cookie, type Locator, type Page } from 'playwright'
 import { mkdir, readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline/promises'
