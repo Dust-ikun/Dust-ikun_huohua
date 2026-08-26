@@ -32,7 +32,7 @@ jobs:
 
       - name: 续一次火 (Run spark job)
         env:
-          DOUYIN_ACCOUNTS: ${{ secrets.DOUYIN_ACCOUNTS }}
+          # DOUYIN_ACCOUNTS: ${{ secrets.DOUYIN_ACCOUNTS }}
           DOUYIN_COOKIE: ${{ secrets.DOUYIN_COOKIE }}
           DOUYIN_TARGET_NAMES: ${{ secrets.DOUYIN_TARGET_NAMES }}
           YIYAN_INCLUDE_SOURCE: ${{ secrets.YIYAN_INCLUDE_SOURCE }}
