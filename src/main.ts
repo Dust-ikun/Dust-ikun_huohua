@@ -180,29 +180,37 @@ async function runDouyinAccount(
       waitUntil: 'domcontentloaded',
     })
 
-    // --- 新增：检测是否要求登录 ---
-    const loginButton = page.locator('text=一键登录').or(page.locator('text=登录')).first()
-    const hasLogin = await loginButton
-      .waitFor({ state: 'visible', timeout: 5000 })
-      .then(() => true)
-      .catch(() => false)
+    // 等待页面加载稳定
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
     
-    if (hasLogin) {
-      // 为了调试，可以截个图
-      await captureFailureScreenshot(page, account.name)
-      throw new Error('页面出现登录按钮，Cookie 已失效或未正确设置')
+    // --- 处理可能出现的弹窗 ---
+    try {
+      // 检测“是否保存登录信息”弹窗
+      const saveDialog = page.locator('text=是否保存登录信息').first()
+      if (await saveDialog.isVisible({ timeout: 3000 })) {
+        // 点击“取消”或“保存”，选择“取消”更安全（不会保留敏感信息）
+        await page.locator('text=取消').first().click()
+        console.log(`[${account.name}] 已关闭保存登录信息弹窗`)
+        // 等待弹窗消失
+        await saveDialog.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
+      }
+    } catch (e) {
+      // 没有弹窗则忽略
     }
     
+    // --- 检查是否真的登录成功（通过搜索框是否存在） ---
     const searchInput = page.locator('input.semi-input[placeholder="搜索"]').first()
     const searchVisible = await searchInput
       .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
       .then(() => true)
       .catch(() => false)
-
+    
     if (!searchVisible) {
-      throw new Error('聊天页搜索框未出现，Cookie 可能已经失效')
+      // 如果搜索框不可见，可能Cookie失效或页面结构变化，截图留证
+      await captureFailureScreenshot(page, account.name)
+      throw new Error('聊天页搜索框未出现，可能登录状态无效或页面结构变化')
     }
-
+  
     await waitForChatListReady(page, account.name)
 
     // 记录未命中的会话，等其余好友都发完再统一报错，避免一个人改名连累当天所有人。
