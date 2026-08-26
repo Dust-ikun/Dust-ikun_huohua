@@ -1,5 +1,7 @@
 import 'dotenv/config'
-import { chromium, type Browser, type Cookie, type Locator, type Page } from 'playwright'
+import { chromium } from 'playwright-extra'
+import StealthPlugin from '@puppeteer/extra-plugin-stealth'
+import { type Browser, type Cookie, type Locator, type Page } from 'playwright'
 import { mkdir, readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
@@ -59,6 +61,10 @@ async function main(): Promise<void> {
   const globalMessageTemplate = resolveSparkMessageTemplate()
   const accounts = resolveDouyinAccounts(globalMessageTemplate)
   const yiyans = await resolveYiyans()
+
+  // 1. 注册 stealth 插件（在 launch 之前）
+  chromium.use(StealthPlugin())
+
   const browser = await chromium.launch({
     headless,
     ...(browserPath ? { executablePath: browserPath } : {}),
@@ -246,7 +252,9 @@ async function runDouyinAccount(
 
       // 3. 输入消息（模拟打字，更真实）
       const message = `hello`  // 可根据需要替换为模板内容
-      await page.keyboard.type(message, { delay: 50 })
+      for (const char of message) {
+        await page.keyboard.type(char, { delay: Math.random() * 80 + 20 }); // 20~100ms 随机敲击
+      }
 
       // 4. 优先点击“发送”按钮（如果存在），否则按回车
       const sendButton = page
@@ -279,7 +287,7 @@ async function runDouyinAccount(
         await captureFailureScreenshot(page, `${account.name}-${targetName}-send-fail`)
       }
 
-      await page.waitForTimeout(1500) // 适当延迟避免频率过快
+      await randomDelay(1500, 5000);
     }
 
     await page.waitForTimeout(5000)
@@ -772,3 +780,8 @@ main().catch((error: unknown) => {
   console.error('启动 Chrome 访问抖音聊天页失败:', error)
   process.exitCode = 1
 })
+
+function randomDelay(min: number = 1500, max: number = 4500): Promise<void> {
+  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+  return new Promise(resolve => setTimeout(resolve, delay));
+}
