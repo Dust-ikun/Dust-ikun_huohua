@@ -304,7 +304,9 @@ async function runDouyinAccount(
           const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
           if (items.length === 0) return false;
           const last = items[items.length - 1] as HTMLElement;
-          return last.innerText.trim() !== prevText.trim() && last.innerText.trim() !== '';
+          if (!last || !last.innerText) return false;
+          const currentText = last.innerText.trim();
+          return currentText !== prevText.trim() && currentText !== '';
         },
         { timeout: 8000 },
         lastMsgBefore
@@ -312,15 +314,15 @@ async function runDouyinAccount(
       console.log(`[${account.name}] 消息发送成功：${targetName}`);
     } catch (e) {
       console.warn(`[${account.name}] 消息未出现在聊天记录，尝试兜底方案...`);
-      // 兜底：点击空白区域触发失焦发送
       await page.mouse.click(10, 10);
       await page.waitForTimeout(500);
-      // 再次检查
       const finalCheck = await page.evaluate(() => {
         const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
         if (items.length === 0) return false;
         const last = items[items.length - 1] as HTMLElement;
-        return last.innerText.trim() !== '' && last.innerText.trim() === 'hello'; // 检查是否包含刚发的消息
+        if (!last || !last.innerText) return false;
+        const currentText = last.innerText.trim();
+        return currentText !== '' && currentText === 'hello'; // 检查是否包含刚发的消息
       });
       if (finalCheck) {
         console.log(`[${account.name}] 兜底方案生效，消息已发送：${targetName}`);
