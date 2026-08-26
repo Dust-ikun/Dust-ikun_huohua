@@ -176,22 +176,22 @@ async function runDouyinAccount(
     }
     
     page = await context.newPage()
+    // --- 修改点1: 改用 'commit' 等待，避免资源加载慢导致超时 ---
     await page.goto('https://www.douyin.com/chat', {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'commit',
+      timeout: 60000,        // 适当延长
     })
-
-    // 等待页面加载稳定
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+    
+    // --- 修改点2: 移除 networkidle 等待（或保留但缩短超时） ---
+    // 注释掉或删除下面这行
+    // await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
     
     // --- 处理可能出现的弹窗 ---
     try {
-      // 检测“是否保存登录信息”弹窗
       const saveDialog = page.locator('text=是否保存登录信息').first()
       if (await saveDialog.isVisible({ timeout: 3000 })) {
-        // 点击“取消”或“保存”，选择“取消”更安全（不会保留敏感信息）
         await page.locator('text=取消').first().click()
         console.log(`[${account.name}] 已关闭保存登录信息弹窗`)
-        // 等待弹窗消失
         await saveDialog.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {})
       }
     } catch (e) {
@@ -206,12 +206,12 @@ async function runDouyinAccount(
       .catch(() => false)
     
     if (!searchVisible) {
-      // 如果搜索框不可见，可能Cookie失效或页面结构变化，截图留证
       await captureFailureScreenshot(page, account.name)
       throw new Error('聊天页搜索框未出现，可能登录状态无效或页面结构变化')
     }
-  
+    
     await waitForChatListReady(page, account.name)
+
 
     // 记录未命中的会话，等其余好友都发完再统一报错，避免一个人改名连累当天所有人。
     const missingNames: string[] = []
