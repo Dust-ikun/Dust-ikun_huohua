@@ -62,6 +62,23 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({
     headless,
     ...(browserPath ? { executablePath: browserPath } : {}),
+    args: [
+    '--disable-blink-features=AutomationControlled',
+    '--disable-features=IsolateOrigins,site-per-process',
+    '--disable-site-isolation-trials',
+    '--disable-web-security',
+    '--disable-features=BlockInsecurePrivateNetworkRequests',
+    '--disable-features=OutOfBlinkCors',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--disable-accelerated-javascript-decoding',
+    '--disable-gpu',
+    '--disable-infobars',
+    '--window-size=1920,1080',
+    '--lang=zh-CN',
+  ],
   })
   const failures: Error[] = []
 
@@ -114,7 +131,34 @@ async function runDouyinAccount(
   includeYiyanSource: boolean,
   autoClose: boolean,
 ): Promise<void> {
-  const context = await browser.newContext()
+  const context = await browser.newContext({
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  viewport: { width: 1920, height: 1080 },
+  deviceScaleFactor: 1,
+  hasTouch: false,
+  isMobile: false,
+  locale: 'zh-CN',
+  timezoneId: 'Asia/Shanghai',
+  permissions: ['geolocation'],
+  geolocation: { longitude: 116.4, latitude: 39.9 },
+  extraHTTPHeaders: {
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  },
+})
+
+  // 注入脚本，删除 webdriver 标记
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
+    // 可选：隐藏更多自动化特征
+    // @ts-ignore
+    window.chrome = { runtime: {} }
+    // @ts-ignore
+    const originalQuery = window.navigator.permissions.query
+    window.navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications' ? Promise.resolve({ state: 'denied' } as PermissionStatus) : originalQuery(parameters)
+    )
+  })
+  
   let page: Page | undefined
 
   try {
