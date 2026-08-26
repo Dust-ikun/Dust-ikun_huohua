@@ -73,8 +73,11 @@ jobs:
         with:
           bun-version: latest
 
+      - name: 安装 pnpm (Install pnpm)
+        run: npm install -g pnpm
+
       - name: 安装运行时依赖 (Install dependencies)
-        run: bun install --production --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: 续一次火 (Run spark job)
         env:
