@@ -171,6 +171,7 @@ async function runDouyinAccount(
     await context.addCookies(account.cookies)
 
     // 立即读取当前上下文中的所有 Cookie（仅限 douyin.com 域）
+    /*
     const cookiesAfter = await context.cookies('https://www.douyin.com');
     console.log(`[${account.name}] 添加后总 Cookie 数: ${cookiesAfter.length}`);
     const hasSession = cookiesAfter.some(c => c.name === 'sessionid');
@@ -179,7 +180,7 @@ async function runDouyinAccount(
         const sessionVal = cookiesAfter.find(c => c.name === 'sessionid')?.value;
         console.log(`[${account.name}] sessionid 值: ${sessionVal}`);
     }
-    
+    */
     page = await context.newPage()
     // 改用 'commit' 等待，避免资源加载慢导致超时
     await page.goto('https://www.douyin.com/chat', {
