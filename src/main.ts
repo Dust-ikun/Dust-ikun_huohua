@@ -297,40 +297,8 @@ async function runDouyinAccount(
       console.log(`[${account.name}] 触发 Enter 键盘事件：${targetName}`);
     }
     
-    // 5. 验证发送是否成功（检查聊天记录）
-    try {
-      await page.waitForFunction(
-        (prevText: string) => {
-          const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
-          if (items.length === 0) return false;
-          const last = items[items.length - 1] as HTMLElement;
-          if (!last || !last.innerText) return false;
-          const currentText = last.innerText.trim();
-          return currentText !== prevText.trim() && currentText !== '';
-        },
-        { timeout: 8000 },
-        lastMsgBefore
-      );
-      console.log(`[${account.name}] 消息发送成功：${targetName}`);
-    } catch (e) {
-      console.warn(`[${account.name}] 消息未出现在聊天记录，尝试兜底方案...`);
-      await page.mouse.click(10, 10);
-      await page.waitForTimeout(500);
-      const finalCheck = await page.evaluate(() => {
-        const items = document.querySelectorAll('.messageListItem, .chat-message-item, [class*="message"]');
-        if (items.length === 0) return false;
-        const last = items[items.length - 1] as HTMLElement;
-        if (!last || !last.innerText) return false;
-        const currentText = last.innerText.trim();
-        return currentText !== '' && currentText === 'hello'; // 检查是否包含刚发的消息
-      });
-      if (finalCheck) {
-        console.log(`[${account.name}] 兜底方案生效，消息已发送：${targetName}`);
-      } else {
-        console.warn(`[${account.name}] 消息发送最终失败：${targetName}`);
-        await captureFailureScreenshot(page, `${account.name}-${targetName}-send-fail`);
-      }
-    }
+    await page.waitForTimeout(1000);
+    console.log(`[${account.name}] 消息已发送（未验证）：${targetName}`);
     
     // 6. 随机延迟
     await randomDelay(2000, 5000);
