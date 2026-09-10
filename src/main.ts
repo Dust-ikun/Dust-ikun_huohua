@@ -244,18 +244,17 @@ async function runDouyinAccount(
     await editorInput.waitFor({ state: 'visible', timeout: 10000 })
     
     // 1. 聚焦并清空
-    await editorInput.focus()
-    await page.waitForTimeout(200 + Math.random() * 300)
-    await editorInput.evaluate((el: HTMLElement) => {
-      el.innerText = '';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    })
+    await editorInput.click()
+    await page.waitForTimeout(100 + Math.random() * 300)
+
+    for (let i = 0; i < 2; i++) {
+      await page.keyboard.press('Control+A')
+      await page.keyboard.press('Backspace')
+    }
     
     // 2. 模拟真人输入
     const message = `hello`
-    for (const char of message) {
-      await page.keyboard.type(char, { delay: Math.random() * 80 + 20 });
-    }
+    await editorInput.pressSequentially(message, { delay: Math.random() * 80 + 20 })
     await page.waitForTimeout(300 + Math.random() * 500)
     
     // 3. 获取发送前的最后一条消息
@@ -314,26 +313,31 @@ async function runDouyinAccount(
 
     console.log(`账号执行完成：${account.name}`)
   } catch (error) {
-    // —— 截图容错 ——
-    let captureTarget = page
-    if (!captureTarget || captureTarget.isClosed()) {
-      console.log(`[截图] 原页面已关闭，尝试创建新页面截图...`)
-      try {
-        if (context && !context.closed()) {
+     try {
+      let captureTarget = page
+      if (!captureTarget || captureTarget.isClosed()) {
+        console.log(`[截图] 原页面已关闭，尝试创建新页面截图...`)
+        try {
+          // 尝试用原 context 新建页面
           captureTarget = await context.newPage()
           await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
-        } else {
+        } catch {
+          // 原有 context 彻底不可用，创建一个全新的
+          console.log(`[截图] 原 context 不可用，创建全新 context...`)
           const newContext = await browser.newContext()
           captureTarget = await newContext.newPage()
           await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
         }
-        console.log(`[截图] 新页面创建完成`)
-      } catch (e) {
-        console.error(`[截图] 创建新页面失败:`, e)
       }
+      
+      // 注意：这里传入 captureTarget 而不是 page
+      await captureFailureScreenshot(captureTarget, account.name)
+    } catch (screenshotError) {
+      // 即使截图彻底失败，也只打印日志，不抛错
+      console.error(`[截图] 截图兜底逻辑也失败了:`, screenshotError)
     }
-    // 注意：这里传入 captureTarget 而不是 page
-    await captureFailureScreenshot(captureTarget, account.name)
+
+    // 最关键的一步：确保原始错误始终能被抛出
     throw error
   } finally {
     if (autoClose) {
