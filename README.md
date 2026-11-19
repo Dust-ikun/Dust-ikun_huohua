@@ -1,7 +1,7 @@
 <h1 align="center">🔥 Douyin Auto Spark</h1>
 
 <p align="center">
-  <strong>抖音聊天续火脚本 · Playwright 自动化 · GitHub Actions 定时运行</strong>
+  <strong>抖音聊天续火脚本 · Playwright 自动化 · 本地运行</strong>
 </p>
 
 <div align="center">
@@ -11,14 +11,13 @@
 
 <div align="center">
   <a href="https://github.com/bling-yshs/douyin-auto-spark/stargazers"><img src="https://img.shields.io/github/stars/bling-yshs/douyin-auto-spark?logo=github&color=yellow" alt="Stars"></a>
-  <a href="https://github.com/bling-yshs/douyin-auto-spark/actions/workflows/renew-fire.yml"><img src="https://img.shields.io/github/actions/workflow/status/bling-yshs/douyin-auto-spark/renew-fire.yml?branch=main&label=%E7%BB%AD%E7%81%AB&logo=githubactions" alt="Spark Status"></a>
   <a href="https://github.com/bling-yshs/douyin-auto-spark/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="License"></a>
 </div>
 <br>
 
 ## ✨ 项目简介
 
-本项目是一个基于 **Playwright + TypeScript** 的抖音自动续火脚本。它会携带你配置的抖音 Cookie 打开聊天页，按配置的会话名称依次定位聊天对象，并从 `assets/yiyan.json` 中随机挑选一言发送出去。支持 Github Actions 运行和本地运行两种方式。
+本项目是一个基于 **Playwright + TypeScript** 的抖音自动续火脚本。它会携带你配置的抖音 Cookie 打开聊天页，按配置的会话名称依次定位聊天对象，并从 `assets/yiyan.json` 中随机挑选一言发送出去。GitHub Actions 运行方式已不可用，本项目目前只支持本地运行。
 
 ## 🚀 功能特性
 
@@ -26,11 +25,11 @@
 - 🎯 **多会话发送** - 通过 `DOUYIN_TARGET_NAMES` 配置多个聊天对象
 - 👥 **多账号续火** - 可通过 `DOUYIN_ACCOUNTS` 为多个账号分别配置 Cookie、聊天对象和消息模板
 - 💬 **随机一言** - 每次从 `assets/yiyan.json` 随机挑选一条 `hitokoto`，默认以 `——「出处」` 的格式附上来源
-- 🤖 **定时续火** - 通过 Github Action 每天 0 点自动续火（但是 Github 定时任务要排队，可能会延迟几个小时）
+- 🤖 **本地定时续火** - 配合 Windows 任务计划程序每天自动续火，失败时邮件告警（见 `scripts/run-daily.ps1`）
 
 ## 🧰 准备工作
 
-在配置 GitHub Actions 或本地 `.env` 之前，需要先准备抖音 Cookie 和要发送消息的会话名称。
+在配置本地 `.env` 之前，需要先准备抖音 Cookie 和要发送消息的会话名称。
 
 ### 1️⃣ 获取抖音 Cookie
 
@@ -64,71 +63,13 @@
 ]
 ```
 
-后面配置 `DOUYIN_COOKIE` 时，需要把整个 JSON 数组作为 Secret 填进去。
+后面配置 `DOUYIN_COOKIE` 时，需要把整个 JSON 数组作为 `.env` 中 `DOUYIN_COOKIE` 的值填进去。
 
-## 运行方式
-### ⚙️ GitHub Actions
+## 💻 运行方式
 
-推荐直接使用 GitHub Actions 定时运行
+GitHub Actions 运行方式已不可用，本项目目前只支持本地运行。
 
-#### 1️⃣ Fork 项目
-
-点击 GitHub 页面右上角的 `Fork`（同时希望可以 star ⭐一下本项目），把本项目复制到你自己的 GitHub 账号下。
-
-![fork](assets/readme/fork.jpg)
-
-Fork 后进入你自己的仓库，例如：
-
-```text
-https://github.com/你的用户名/douyin-auto-spark
-```
-
-#### 2️⃣ 配置 Secrets
-
-进入你 Fork 后的仓库：
-
-```text
-Settings -> Secrets and variables -> Actions -> New repository secret
-```
-
-![add-secret](assets/readme/add-secret.jpg)
-
-添加以下 secrets：
-
-| Secret | 必填 | 说明 |
-|:---|:---:|:---|
-| `DOUYIN_COOKIE` | ✅ | Cookie-Editor 导出的完整 Cookie JSON 数组 |
-| `DOUYIN_TARGET_NAMES` | ✅ | 需要续火的好友名称 JSON 数组，例如 `["暮邵落白"]`，建议填写抖音备注名 |
-| `DOUYIN_ACCOUNTS` | ❌ | 多账号配置，配置后会无视单账号配置，详情见下方「👥 多账号配置」 |
-| `YIYAN_INCLUDE_SOURCE` | ❌ | 是否携带一言出处，默认开启；设置为 `false` 时只发送一言正文 |
-| `SPARK_MESSAGE_TEMPLATE` | ❌ | 自定义火花消息模板，见下方「✉️ 自定义消息模板」 |
-| `MAIL_ADDRESS` | ❌ | SMTP 发件邮箱地址 |
-| `MAIL_TO` | ❌ | 任务失败提醒的收件邮箱，不配置时使用 `MAIL_ADDRESS` |
-| `MAIL_USERNAME` | ❌ | SMTP 登录账号，通常与 `MAIL_ADDRESS` 相同 |
-| `MAIL_PASSWORD` | ❌ | SMTP 授权码或密码；QQ 邮箱请填写授权码 |
-| `MAIL_HOST` | ❌ | SMTP 服务器地址，默认 `smtp.qq.com` |
-| `MAIL_PORT` | ❌ | SMTP 服务器端口，默认 `465` |
-| `MAIL_SECURE` | ❌ | 是否使用 SSL，默认 `true` |
-
-配置 `MAIL_ADDRESS`、`MAIL_USERNAME` 和 `MAIL_PASSWORD` 后，续火失败会发送提醒邮件，并附带失败图片。可通过 `MAIL_TO` 指定收件地址；未配置时邮件发送到 `MAIL_ADDRESS`。使用非 QQ 邮箱时，请同时按服务商要求配置 `MAIL_HOST`、`MAIL_PORT` 和 `MAIL_SECURE`。
-
-#### 3️⃣ 手动运行一次
-
-```text
-Actions -> 点击绿色的 I understand my workflows, go ahead and enable them -> 🚀 续一次火 -> Enable workflow -> Run workflow
-```
-
-点击 `Run workflow` 后等待任务完成。手机打开抖音，你就可以发现你发了一条嘉豪语录给朋友了
-
-![run-workflow](assets/readme/run-workflow.jpg)
-
-#### 4️⃣ 每天自动运行
-
-如果手动运行一次没报错，那么默认情况下，每天北京时间 0 点会自动续一次火（不需要配置任何其他东西），但是由于 github 会延迟，大概最多凌晨 3 点之前会自动续一次火
-
-### 💻 本地运行
-
-#### 1️⃣ 安装依赖
+### 1️⃣ 安装依赖
 
 本地调试需要 Node.js 和 pnpm
 
@@ -136,7 +77,7 @@ Actions -> 点击绿色的 I understand my workflows, go ahead and enable them -
 pnpm install
 ```
 
-#### 2️⃣ 配置环境变量
+### 2️⃣ 配置环境变量
 
 复制 `.env.example` 为 `.env`，并按实际情况修改：
 
@@ -157,7 +98,7 @@ cp .env.example .env
 | `PLAYWRIGHT_HEADLESS` | ❌ | `true` | 是否使用无头模式 |
 | `AUTO_CLOSE` | ❌ | `true` | 发送完成后是否自动关闭浏览器 |
 
-#### 3️⃣ 启动项目
+### 3️⃣ 启动项目
 
 ```bash
 pnpm dev
@@ -165,9 +106,46 @@ pnpm dev
 
 脚本会打开 `https://www.douyin.com/chat`，依次定位配置中的好友并发送随机一言。
 
+### 4️⃣ 每日定时运行（可选）
+
+Windows 下可配合系统自带的「任务计划程序」每天自动续火，项目已提供封装脚本 `scripts/run-daily.ps1`，它会：
+
+1. 强制无头模式运行续火脚本，控制台输出追加到 `artifacts/logs/<日期>.log`
+2. 执行失败或超时（默认 30 分钟）时，通过 SMTP 发送告警邮件并附失败截图
+3. 最近一次执行结果写入 `artifacts/LAST_RESULT.txt`
+4. 自动清理 30 天前的旧日志
+
+在「任务计划程序」中新建任务，触发器设为每天固定时间，操作填写：
+
+```text
+程序/脚本：powershell
+参数：-NoProfile -ExecutionPolicy Bypass -File <项目根目录>\scripts\run-daily.ps1
+```
+
+脚本参数：`-TestMail` 只发一封测试邮件验证通知通道；`-TimeoutMinutes` 调整超时分钟数；`-KeepLogDays` 调整日志保留天数（0 表示不清理）。
+
+### 5️⃣ 失败邮件通知（可选）
+
+在 `.env` 中配置以下变量后，定时脚本检测到续火失败会自动发告警邮件，并附带失败截图：
+
+| 变量 | 必填 | 默认值 | 说明 |
+|:---|:---:|:---:|:---|
+| `MAIL_ADDRESS` | ✅ | - | SMTP 发件邮箱地址 |
+| `MAIL_TO` | ❌ | `MAIL_ADDRESS` | 告警邮件收件地址 |
+| `MAIL_USERNAME` | ❌ | `MAIL_ADDRESS` | SMTP 登录账号 |
+| `MAIL_PASSWORD` | ✅ | - | SMTP 授权码或密码；QQ 邮箱请填写授权码 |
+| `MAIL_HOST` | ❌ | `smtp.qq.com` | SMTP 服务器地址 |
+| `MAIL_PORT` | ❌ | `587` | SMTP 端口，使用 STARTTLS |
+
+三个核心变量（`MAIL_ADDRESS`、`MAIL_USERNAME`、`MAIL_PASSWORD`）配置齐全后邮件通知才会生效；只跑 `pnpm dev` 手动续火时不需要配置这些变量。
+
+### 6️⃣ 先手动验证一次
+
+定时任务跑起来之前，建议先用 `pnpm dev` 手动跑一次确认 Cookie 和好友名称配置无误，再启用任务计划程序。
+
 ## 👥 多账号配置
 
-需要为多个抖音账号续火时，将下面的 JSON 保存为 GitHub Secret 或本地环境变量 `DOUYIN_ACCOUNTS`。每个账号的 `cookie` 都要替换成 Cookie-Editor 导出的完整数组。
+需要为多个抖音账号续火时，将下面的 JSON 保存为本地 `.env` 中的环境变量 `DOUYIN_ACCOUNTS`。每个账号的 `cookie` 都要替换成 Cookie-Editor 导出的完整数组。
 
 ```json
 [
@@ -261,8 +239,8 @@ pnpm format
 
 ```text
 douyin-auto-spark/
-├── .github/workflows/
-│   └── renew-fire.yml          # 🚀 GitHub Actions 定时续火任务
+├── scripts/
+│   └── run-daily.ps1           # ⏰ 本地每日定时执行 + 失败邮件通知
 ├── assets/
 │   ├── readme/                 # 🖼️ README 资源
 │   └── yiyan.json              # 📚 随机消息数据源

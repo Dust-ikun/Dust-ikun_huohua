@@ -69,22 +69,22 @@ async function main(): Promise<void> {
     headless,
     ...(browserPath ? { executablePath: browserPath } : {}),
     args: [
-    '--disable-blink-features=AutomationControlled',
-    '--disable-features=IsolateOrigins,site-per-process',
-    '--disable-site-isolation-trials',
-    '--disable-web-security',
-    '--disable-features=BlockInsecurePrivateNetworkRequests',
-    '--disable-features=OutOfBlinkCors',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-accelerated-2d-canvas',
-    '--disable-accelerated-javascript-decoding',
-    '--disable-gpu',
-    '--disable-infobars',
-    '--window-size=1920,1080',
-    '--lang=zh-CN',
-  ],
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--disable-web-security',
+      '--disable-features=BlockInsecurePrivateNetworkRequests',
+      '--disable-features=OutOfBlinkCors',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-accelerated-javascript-decoding',
+      '--disable-gpu',
+      '--disable-infobars',
+      '--window-size=1920,1080',
+      '--lang=zh-CN',
+    ],
   })
   const failures: Error[] = []
 
@@ -138,7 +138,8 @@ async function runDouyinAccount(
   autoClose: boolean,
 ): Promise<void> {
   const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1920, height: 1080 },
     deviceScaleFactor: 1,
     hasTouch: false,
@@ -159,11 +160,12 @@ async function runDouyinAccount(
     window.chrome = { runtime: {} }
     // @ts-ignore
     const originalQuery = window.navigator.permissions.query
-    window.navigator.permissions.query = (parameters) => (
-      parameters.name === 'notifications' ? Promise.resolve({ state: 'denied' } as PermissionStatus) : originalQuery(parameters)
-    )
+    window.navigator.permissions.query = (parameters) =>
+      parameters.name === 'notifications'
+        ? Promise.resolve({ state: 'denied' } as PermissionStatus)
+        : originalQuery(parameters)
   })
-  
+
   let page: Page | undefined
 
   try {
@@ -187,7 +189,7 @@ async function runDouyinAccount(
       waitUntil: 'commit',
       timeout: 60000,
     })
-    
+
     // --- 处理可能出现的弹窗 ---
     try {
       const saveDialog = page.locator('text=是否保存登录信息').first()
@@ -199,19 +201,19 @@ async function runDouyinAccount(
     } catch (e) {
       // 没有弹窗则忽略
     }
-    
+
     // --- 检查是否真的登录成功（通过搜索框是否存在） ---
     const searchInput = page.locator('input.semi-input[placeholder="搜索"]').first()
     const searchVisible = await searchInput
       .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
       .then(() => true)
       .catch(() => false)
-    
+
     if (!searchVisible) {
       await captureFailureScreenshot(page, account.name)
       throw new Error('聊天页搜索框未出现，可能登录状态无效或页面结构变化')
     }
-    
+
     await waitForChatListReady(page, account.name)
 
     // 记录未命中的会话，等其余好友都发完再统一报错
@@ -236,72 +238,77 @@ async function runDouyinAccount(
       console.log(`[${account.name}] 已打开私信：${targetName}`)
 
       // ------ 改进后的发送消息逻辑 ------
-    const editorInput = page
-      .locator(
-        '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
-      )
-      .first()
-    await editorInput.waitFor({ state: 'visible', timeout: 10000 })
-    
-    // 1. 聚焦并清空
-    await editorInput.click()
-    await page.waitForTimeout(100 + Math.random() * 300)
+      const editorInput = page
+        .locator(
+          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
+        )
+        .first()
+      await editorInput.waitFor({ state: 'visible', timeout: 10000 })
 
-    for (let i = 0; i < 2; i++) {
-      await page.keyboard.press('Control+A')
-      await page.keyboard.press('Backspace')
-    }
-    
-    // 2. 模拟真人输入
-    const message = `hello`
-    await editorInput.pressSequentially(message, { delay: Math.random() * 80 + 20 })
-    await page.waitForTimeout(300 + Math.random() * 500)
-    
-    // 3. 获取发送前的最后一条消息
-    const lastMsgBefore = await page
-      .locator('.messageListItem, .chat-message-item, [class*="message"]')
-      .last()
-      .textContent()
-      .catch(() => '');
-    
-    // 4. 发送（优先点击按钮）
-    const sendButton = page
-      .locator([
-        '.send-btn',
-        '.chatSendButton',
-        '[aria-label="发送"]',
-        '.message-send-btn',
-        'button:has-text("发送")',
-        '.send-button',
-        '[data-testid="send-btn"]',
-        '.im-send-btn',
-      ].join(', '))
-      .first()
-    
-    const sendBtnVisible = await sendButton.isVisible({ timeout: 3000 }).catch(() => false)
-    if (sendBtnVisible) {
-      await sendButton.click({ force: true })
-      console.log(`[${account.name}] 点击发送按钮：${targetName}`)
-    } else {
-      // 触发完整键盘事件
-      await page.evaluate(() => {
-        const el = document.querySelector(
-          '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]'
-        ) as HTMLElement;
-        if (el) {
-          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, bubbles: true, cancelable: true }));
-          el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', which: 13, bubbles: true }));
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      });
-      console.log(`[${account.name}] 触发 Enter 键盘事件：${targetName}`);
-    }
-    
-    await page.waitForTimeout(1000);
-    console.log(`[${account.name}] 消息已发送（未验证）：${targetName}`);
-    
-    // 6. 随机延迟
-    await randomDelay(2000, 5000);
+      // 1. 聚焦并清空
+      await editorInput.click()
+      await page.waitForTimeout(100 + Math.random() * 300)
+
+      for (let i = 0; i < 2; i++) {
+        await page.keyboard.press('Control+A')
+        await page.keyboard.press('Backspace')
+      }
+
+      // 2. 模拟真人输入
+      const message = `🔥`
+      await editorInput.pressSequentially(message, { delay: Math.random() * 80 + 20 })
+      await page.waitForTimeout(300 + Math.random() * 500)
+
+      // 4. 发送（优先点击按钮）
+      const sendButton = page
+        .locator(
+          [
+            '.send-btn',
+            '.chatSendButton',
+            '[aria-label="发送"]',
+            '.message-send-btn',
+            'button:has-text("发送")',
+            '.send-button',
+            '[data-testid="send-btn"]',
+            '.im-send-btn',
+          ].join(', '),
+        )
+        .first()
+
+      const sendBtnVisible = await sendButton.isVisible({ timeout: 3000 }).catch(() => false)
+      if (sendBtnVisible) {
+        await sendButton.click({ force: true })
+        console.log(`[${account.name}] 点击发送按钮：${targetName}`)
+      } else {
+        // 触发完整键盘事件
+        await page.evaluate(() => {
+          const el = document.querySelector(
+            '.messageEditorimChatEditorContainer [data-slate-editor="true"][contenteditable="true"]',
+          ) as HTMLElement
+          if (el) {
+            el.dispatchEvent(
+              new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                which: 13,
+                bubbles: true,
+                cancelable: true,
+              }),
+            )
+            el.dispatchEvent(
+              new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', which: 13, bubbles: true }),
+            )
+            el.dispatchEvent(new Event('input', { bubbles: true }))
+          }
+        })
+        console.log(`[${account.name}] 触发 Enter 键盘事件：${targetName}`)
+      }
+
+      await page.waitForTimeout(1000)
+      console.log(`[${account.name}] 消息已发送（未验证）：${targetName}`)
+
+      // 6. 随机延迟
+      await randomDelay(2000, 5000)
     }
     if (missingNames.length > 0) {
       throw new Error(
@@ -313,23 +320,27 @@ async function runDouyinAccount(
 
     console.log(`账号执行完成：${account.name}`)
   } catch (error) {
-     try {
+    try {
       let captureTarget = page
       if (!captureTarget || captureTarget.isClosed()) {
         console.log(`[截图] 原页面已关闭，尝试创建新页面截图...`)
         try {
           // 尝试用原 context 新建页面
           captureTarget = await context.newPage()
-          await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
+          await captureTarget
+            .goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' })
+            .catch(() => {})
         } catch {
           // 原有 context 彻底不可用，创建一个全新的
           console.log(`[截图] 原 context 不可用，创建全新 context...`)
           const newContext = await browser.newContext()
           captureTarget = await newContext.newPage()
-          await captureTarget.goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' }).catch(() => {})
+          await captureTarget
+            .goto('https://www.douyin.com/chat', { waitUntil: 'domcontentloaded' })
+            .catch(() => {})
         }
       }
-      
+
       // 注意：这里传入 captureTarget 而不是 page
       await captureFailureScreenshot(captureTarget, account.name)
     } catch (screenshotError) {
@@ -433,11 +444,13 @@ async function captureFailureScreenshot(
   page: Page | undefined,
   accountName: string,
 ): Promise<void> {
-  console.log(`[截图] 账号: ${accountName}, page存在: ${!!page}, isClosed: ${page?.isClosed() ?? 'N/A'}`);
+  console.log(
+    `[截图] 账号: ${accountName}, page存在: ${!!page}, isClosed: ${page?.isClosed() ?? 'N/A'}`,
+  )
 
   if (!page || page.isClosed()) {
-    console.log(`[截图] 跳过截图（原因：页面为空或已关闭）`);
-    return;
+    console.log(`[截图] 跳过截图（原因：页面为空或已关闭）`)
+    return
   }
 
   try {
@@ -798,6 +811,6 @@ main().catch((error: unknown) => {
 })
 
 function randomDelay(min: number = 1500, max: number = 4500): Promise<void> {
-  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-  return new Promise(resolve => setTimeout(resolve, delay));
+  const delay = Math.floor(Math.random() * (max - min + 1)) + min
+  return new Promise((resolve) => setTimeout(resolve, delay))
 }
