@@ -115,49 +115,60 @@ Windows 下可配合系统自带的「任务计划程序」每天自动续火，
 3. 最近一次执行结果写入 `artifacts/LAST_RESULT.txt`
 4. 自动清理 30 天前的旧日志
 
-在「任务计划程序」中新建任务，触发器设为每天固定时间，操作填写：
+推荐注册两个任务：
 
-```text
-程序/脚本：powershell
-参数：-NoProfile -ExecutionPolicy Bypass -File <项目根目录>\scripts\run-daily.ps1
-```
+- `DouyinAutoSpark`：主任务，每天 12:05 续火
+- `DouyinAutoSpark-Backup`：备用任务，每天 20:00 补跑；带 `-SkipIfDone`，当天已有成功记录就跳过，不会重复发消息
 
-也可以跳过界面，用 PowerShell「以管理员身份运行」一键注册（先把 `$root` 换成你的项目根目录）：
+为什么需要备用任务：注册出来的任务等价于「只在用户登录时运行」。如果触发时刻电脑处于睡眠且用户尚未登录，即使勾了「错过计划启动后尽快运行」和「唤醒计算机运行此任务」，也可能直接把这次判为错过并跳到次日（2026-11-20 就发生过）。20:00 的备用任务用于兜底。Playwright 的浏览器装在 `%LOCALAPPDATA%\ms-playwright` 下、按用户隔离，换账户或用 SYSTEM 运行会找不到浏览器。
+
+也可以跳过界面，用 PowerShell 一键注册（先把 `$root` 换成你的项目根目录）：
 
 ```powershell
 $root = 'd:\project\DustIkun_huohua'
 
 $action = New-ScheduledTaskAction `
   -Execute 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' `
-  -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}\scripts\run-daily.ps1"' -f $root) `
+  -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}\scripts\run-daily.ps1"' -f $root) `
   -WorkingDirectory $root
-
-$trigger = New-ScheduledTaskTrigger -Daily -At '09:00' -RandomDelay (New-TimeSpan -Minutes 2)
 
 $settings = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
+  -WakeToRun `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
   -MultipleInstances IgnoreNew
 
-Register-ScheduledTask -TaskName '抖音续火-每日' `
-  -Action $action -Trigger $trigger -Settings $settings `
-  -Description '每天无头续火，失败时邮件告警'
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+
+Register-ScheduledTask -TaskName 'DouyinAutoSpark' `
+  -Action $action -Trigger (New-ScheduledTaskTrigger -Daily -At '12:05') `
+  -Settings $settings -Principal $principal `
+  -Description '每天 12:05 无头续火，失败时邮件告警' -Force
+
+$backupAction = New-ScheduledTaskAction `
+  -Execute 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' `
+  -Argument ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}\scripts\run-daily.ps1" -SkipIfDone' -f $root) `
+  -WorkingDirectory $root
+
+Register-ScheduledTask -TaskName 'DouyinAutoSpark-Backup' `
+  -Action $backupAction -Trigger (New-ScheduledTaskTrigger -Daily -At '20:00') `
+  -Settings $settings -Principal $principal `
+  -Description '20:00 备用续火，当天已成功则跳过' -Force
 ```
 
 注册完建议立刻跑一次验证，而不是等第二天：
 
 ```powershell
-Start-ScheduledTask -TaskName '抖音续火-每日'
-Get-ScheduledTaskInfo -TaskName '抖音续火-每日' | Format-List LastRunTime, LastTaskResult, NextRunTime
+Start-ScheduledTask -TaskName 'DouyinAutoSpark'
+Get-ScheduledTaskInfo -TaskName 'DouyinAutoSpark' | Format-List LastRunTime, LastTaskResult, NextRunTime
+Get-ScheduledTaskInfo -TaskName 'DouyinAutoSpark-Backup' | Format-List NextRunTime
 ```
 
-`LastTaskResult` 为 `0x0` 表示成功，`0x41301` 表示还在运行。任务名已存在时注册会报错，先执行 `Unregister-ScheduledTask -TaskName '抖音续火-每日' -Confirm:$false`，或给 `Register-ScheduledTask` 追加 `-Force`。
+`LastTaskResult` 为 `0x0` 表示成功，`0x41301` 表示还在运行。任务名已存在时注册会报错，上面的命令已带 `-Force` 覆盖；如需删除，执行 `Unregister-ScheduledTask -TaskName 'DouyinAutoSpark' -Confirm:$false` 和 `Unregister-ScheduledTask -TaskName 'DouyinAutoSpark-Backup' -Confirm:$false`。
 
-注册出来的任务等价于「只在用户登录时运行」，触发时间点 Windows 账号需处于登录状态（锁屏不影响）。Playwright 的浏览器装在 `%LOCALAPPDATA%\ms-playwright` 下、按用户隔离，换账户或用 SYSTEM 运行会找不到浏览器。
-
-脚本参数：`-TestMail` 只发一封测试邮件验证通知通道；`-TimeoutMinutes` 调整超时分钟数；`-KeepLogDays` 调整日志保留天数（0 表示不清理）。
+脚本参数：`-TestMail` 只发一封测试邮件验证通知通道；`-SkipIfDone` 当天日志已有成功记录时跳过（供备用任务使用）；`-TimeoutMinutes` 调整超时分钟数；`-KeepLogDays` 调整日志保留天数（0 表示不清理）。
 
 ### 5️⃣ 失败邮件通知（可选）
 

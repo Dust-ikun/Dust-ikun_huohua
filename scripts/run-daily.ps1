@@ -20,6 +20,9 @@
 .PARAMETER TestMail
   只发一封测试邮件验证配置，不执行续火。
 
+.PARAMETER SkipIfDone
+  若当天日志里已有成功记录则直接跳过，供备用触发器避免重复发送。
+
 .PARAMETER TimeoutMinutes
   单次执行超时分钟数，默认 30，超时会杀掉浏览器进程并按失败告警。
 
@@ -32,6 +35,7 @@
 [CmdletBinding()]
 param(
   [switch]$TestMail,
+  [switch]$SkipIfDone,
   [int]$TimeoutMinutes = 30,
   [int]$KeepLogDays = 30
 )
@@ -214,6 +218,20 @@ if ($TestMail) {
 }
 
 # ---------- 正常运行模式 ----------
+# 备用触发器用 -SkipIfDone 调用：当天已有成功记录就不再发第二遍。
+# 用 .NET 按 UTF-8 读取，避免 PowerShell 5.1 把无 BOM 的 UTF-8 日志当 ANSI 而匹配不到中文。
+if ($SkipIfDone) {
+  $alreadySucceeded = (Test-Path $logFile) -and
+    [System.IO.File]::ReadAllText($logFile, [System.Text.Encoding]::UTF8).Contains('续火任务成功，耗时')
+
+  if ($alreadySucceeded) {
+    Write-Log '今日已有成功记录（-SkipIfDone），跳过本次补跑'
+    exit 0
+  }
+
+  Write-Log '今日尚未成功，开始补跑（-SkipIfDone）'
+}
+
 $config = Get-MailConfig
 $startTime = Get-Date
 
