@@ -202,16 +202,45 @@ async function runDouyinAccount(
       // 没有弹窗则忽略
     }
 
-    // --- 检查是否真的登录成功（通过搜索框是否存在） ---
+    // --- 检查登录态：Cookie 失效时抖音会弹出扫码登录框 ---
+    // 【为什么要单独检测】未登录时聊天页仍可能渲染搜索框和缓存会话，
+    // 后续搜索、打开私信、输入消息都会“看起来成功”，但实际发不出去。
     const searchInput = page.locator('input.semi-input[placeholder="搜索"]').first()
-    const searchVisible = await searchInput
-      .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
-      .then(() => true)
-      .catch(() => false)
+    const loginDialog = page
+      .getByText(/扫码登录|登录后免费畅享高清视频|验证码登录|密码登录/)
+      .filter({ visible: true })
+      .first()
 
-    if (!searchVisible) {
+    const firstVisible = await Promise.race([
+      searchInput
+        .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
+        .then(() => 'search' as const)
+        .catch(() => null),
+      loginDialog
+        .waitFor({ state: 'visible', timeout: CHAT_PAGE_READY_TIMEOUT })
+        .then(() => 'login' as const)
+        .catch(() => null),
+    ])
+
+    if (firstVisible === 'login') {
+      await captureFailureScreenshot(page, `${account.name}-login`)
+      throw new Error(
+        'Cookie 登录态已失效（页面出现扫码登录弹窗），请重新从浏览器导出 Cookie 并更新 .env 后重试',
+      )
+    }
+
+    if (firstVisible !== 'search') {
       await captureFailureScreenshot(page, account.name)
       throw new Error('聊天页搜索框未出现，可能登录状态无效或页面结构变化')
+    }
+
+    // 搜索框可能先于登录弹窗渲染，出现后再复查一次。
+    await page.waitForTimeout(1000)
+    if (await loginDialog.isVisible().catch(() => false)) {
+      await captureFailureScreenshot(page, `${account.name}-login`)
+      throw new Error(
+        'Cookie 登录态已失效（页面出现扫码登录弹窗），请重新从浏览器导出 Cookie 并更新 .env 后重试',
+      )
     }
 
     await waitForChatListReady(page, account.name)
